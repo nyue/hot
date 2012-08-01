@@ -6,8 +6,8 @@
 //     March 2005.
 //     Drew.Whitehouse@anu.edu.au
 //
-//     $Id: SOP_Ocean.C 203 2007-11-20 01:49:42Z drw900 $ 
-// 
+//     $Id: SOP_Ocean.C 203 2007-11-20 01:49:42Z drw900 $
+//
 
 //     Houdini Ocean Toolkit
 //     Copyright (C) 2005  Drew Whitehouse, ANU Supercomputer Facility
@@ -32,7 +32,7 @@
 
 #include "SOP_Ocean.h"
 
-#include <UT/UT_DSOVersion.h>
+// #include <UT/UT_DSOVersion.h>
 #include <CMD/CMD_Manager.h>
 #include <CMD/CMD_Args.h>
 #include <VEX/VEX_VexOp.h>
@@ -44,39 +44,39 @@
 #include <CH/CH_LocalVariable.h>
 #include <PRM/PRM_Include.h>
 #include <OP/OP_Operator.h>
-#include <OP/OP_OperatorTable.h>                                            
+#include <OP/OP_OperatorTable.h>
 #include <GU/GU_PrimPart.h>
 #include <GA/GA_AttributeRef.h>
 
 // --------------------------------- SOP paramaters --------------------------------------------
 
 // simulation grid resolution, we want it to be power of two only 16 - 2048 allowed
-static PRM_Range       resolutionRange(PRM_RANGE_RESTRICTED,4,PRM_RANGE_RESTRICTED,11);  
+static PRM_Range       resolutionRange(PRM_RANGE_RESTRICTED,4,PRM_RANGE_RESTRICTED,11);
 static PRM_Name        resolutionName("res","Ocean Resolution");
 static PRM_Default     resolutionDefaults[] = {PRM_Default(8)};
 
 // grid size
-static PRM_Range       gridRange(PRM_RANGE_RESTRICTED,1.0,PRM_RANGE_FREE);  
+static PRM_Range       gridRange(PRM_RANGE_RESTRICTED,1.0,PRM_RANGE_FREE);
 static PRM_Name        gridName("s","Ocean Size (m)");
 static PRM_Default     gridDefaults[] = {PRM_Default(200.0)};
 
 // wind speed
-static PRM_Range       windspeedRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_FREE);  
+static PRM_Range       windspeedRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_FREE);
 static PRM_Name        windspeedName("V","Windspeed (m/s)");
 static PRM_Default     windspeedDefault = PRM_Default(30.0);
 
 // wind direction
-static PRM_Range       winddirRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_RESTRICTED,360.0);  
+static PRM_Range       winddirRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_RESTRICTED,360.0);
 static PRM_Name        winddirName("w","Wind direction");
 static PRM_Default     winddirDefault = PRM_Default(0.0);
 
 // smallest wave size
-static PRM_Range       smallestRange(PRM_RANGE_RESTRICTED,0.02,PRM_RANGE_FREE);  
+static PRM_Range       smallestRange(PRM_RANGE_RESTRICTED,0.02,PRM_RANGE_FREE);
 static PRM_Name        smallestName("l","Shortest Wavelength(m)");
 static PRM_Default     smallestDefault = PRM_Default(1.0);
 
-// fiddle 
-static PRM_Range       fiddleRange(PRM_RANGE_RESTRICTED,0.0001,PRM_RANGE_UI,100.0);  
+// fiddle
+static PRM_Range       fiddleRange(PRM_RANGE_RESTRICTED,0.0001,PRM_RANGE_UI,100.0);
 static PRM_Name        fiddleName("A","Approx. Waveheight(m)");
 static PRM_Default     fiddleDefault = PRM_Default(1.0);
 
@@ -85,47 +85,47 @@ static PRM_Name        seedName("seed","Seed");
 
 // chop toggle
 static PRM_Name        chopToggleName("chop_toggle","Chop");
-static PRM_Default     chopToggleDefault = PRM_Default(0); 
+static PRM_Default     chopToggleDefault = PRM_Default(0);
 
 // chop amount
-static PRM_Range       chopRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_FREE,100.0);  
+static PRM_Range       chopRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_FREE,100.0);
 static PRM_Name        chopName("chop","Choppyness");
 static PRM_Default     chopDefault = PRM_Default(1.0);
 
 // damp amount
-static PRM_Range       dampRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_RESTRICTED,1.0);  
+static PRM_Range       dampRange(PRM_RANGE_RESTRICTED,0.0,PRM_RANGE_RESTRICTED,1.0);
 static PRM_Name        dampName("damp","Damp Reflections");
 static PRM_Default     dampDefault = PRM_Default(1.0);
 
 // wind_align amount
-static PRM_Range       wind_alignRange(PRM_RANGE_RESTRICTED,1.0,PRM_RANGE_RESTRICTED,10.0);  
+static PRM_Range       wind_alignRange(PRM_RANGE_RESTRICTED,1.0,PRM_RANGE_RESTRICTED,10.0);
 static PRM_Name        wind_alignName("wind_align","Wind Alignment");
 static PRM_Default     wind_alignDefault = PRM_Default(2.0);
 
 // depth
-static PRM_Range       depthRange(PRM_RANGE_RESTRICTED,0.01,PRM_RANGE_RESTRICTED,3000.0);  
+static PRM_Range       depthRange(PRM_RANGE_RESTRICTED,0.01,PRM_RANGE_RESTRICTED,3000.0);
 static PRM_Name        depthName("ocean_depth","Ocean Depth");
 static PRM_Default     depthDefault = PRM_Default(200.0);
 
 // time
-static PRM_Range       timeRange(PRM_RANGE_FREE,0.0,PRM_RANGE_FREE,3000.0);  
+static PRM_Range       timeRange(PRM_RANGE_FREE,0.0,PRM_RANGE_FREE,3000.0);
 static PRM_Name        timeName("time","Time");
 static PRM_Default     timeDefault = PRM_Default(0,"$T");
 
 // interp toggle
 static PRM_Name        interpToggleName("interp_toggle","Catmull-Rom Interpolation");
-static PRM_Default     interpToggleDefault = PRM_Default(1); 
+static PRM_Default     interpToggleDefault = PRM_Default(1);
 
 // normals toggle
 static PRM_Name       normalsToggleName("normals_toggle","Normals");
-static PRM_Default     normalsToggleDefault = PRM_Default(0); 
+static PRM_Default     normalsToggleDefault = PRM_Default(0);
 
 // jacobian toggle
 static PRM_Name       jacobianToggleName("jacobian_toggle","Jacobian");
-static PRM_Default     jacobianToggleDefault = PRM_Default(0); 
+static PRM_Default     jacobianToggleDefault = PRM_Default(0);
 
 PRM_Template
-SOP_Ocean::myTemplateList[] = 
+SOP_Ocean::myTemplateList[] =
 {
   PRM_Template(PRM_INT,1,&resolutionName, resolutionDefaults,0,&resolutionRange,oceanChanged),
 
@@ -141,23 +141,23 @@ SOP_Ocean::myTemplateList[] =
 
   PRM_Template(PRM_INT,1,&seedName, 0,0,0,oceanChanged),
 
-  PRM_Template(PRM_TOGGLE,1,&chopToggleName, &chopToggleDefault,0,0,oceanChanged), 
+  PRM_Template(PRM_TOGGLE,1,&chopToggleName, &chopToggleDefault,0,0,oceanChanged),
 
-  PRM_Template(PRM_FLT,1,&chopName, &chopDefault,0,&chopRange), 
+  PRM_Template(PRM_FLT,1,&chopName, &chopDefault,0,&chopRange),
 
-  PRM_Template(PRM_FLT,1,&dampName, &dampDefault,0,&dampRange,oceanChanged), 
+  PRM_Template(PRM_FLT,1,&dampName, &dampDefault,0,&dampRange,oceanChanged),
 
-  PRM_Template(PRM_FLT,1,&wind_alignName, &wind_alignDefault,0,&wind_alignRange,oceanChanged), 
+  PRM_Template(PRM_FLT,1,&wind_alignName, &wind_alignDefault,0,&wind_alignRange,oceanChanged),
 
-  PRM_Template(PRM_FLT,1,&depthName, &depthDefault,0,&depthRange,oceanChanged), 
+  PRM_Template(PRM_FLT,1,&depthName, &depthDefault,0,&depthRange,oceanChanged),
 
-  PRM_Template(PRM_FLT_J,1,&timeName, &timeDefault,0,&timeRange,0), 
+  PRM_Template(PRM_FLT_J,1,&timeName, &timeDefault,0,&timeRange,0),
 
-  PRM_Template(PRM_TOGGLE,1,&interpToggleName, &interpToggleDefault,0,0), 
+  PRM_Template(PRM_TOGGLE,1,&interpToggleName, &interpToggleDefault,0,0),
 
-  PRM_Template(PRM_TOGGLE,1,&normalsToggleName, &normalsToggleDefault,0,0,oceanChanged), 
+  PRM_Template(PRM_TOGGLE,1,&normalsToggleName, &normalsToggleDefault,0,0,oceanChanged),
 
-  PRM_Template(PRM_TOGGLE,1,&jacobianToggleName, &jacobianToggleDefault,0,0,oceanChanged), 
+  PRM_Template(PRM_TOGGLE,1,&jacobianToggleName, &jacobianToggleDefault,0,0,oceanChanged),
 
   PRM_Template()
 };
@@ -262,8 +262,8 @@ SOP_Ocean::cookMySop(OP_Context &context)
       _ocean_context = _ocean->new_context(true,do_chop,do_normals,do_jacobian);
 
       _ocean_needs_rebuild = false;
-      //             std::cout << "######### SOP, rebuilt ocean, norm_factor = " << _ocean_scale 
-      //                       << " chop = " << do_chop 
+      //             std::cout << "######### SOP, rebuilt ocean, norm_factor = " << _ocean_scale
+      //                       << " chop = " << do_chop
       //                       << " norm = " << do_normals
       //                       << " jacobian = " << do_jacobian
       //                       << std::endl;
@@ -300,7 +300,7 @@ SOP_Ocean::cookMySop(OP_Context &context)
     {
       UT_Vector4 p = ppt->getPos();
 
-                
+
       if (linterp)
       {
         _ocean_context->eval_xz(p(0),p(2));
@@ -310,7 +310,7 @@ SOP_Ocean::cookMySop(OP_Context &context)
         _ocean_context->eval2_xz(p(0),p(2));
       }
 
-      if (do_chop) 
+      if (do_chop)
       {
         p.assign( p(0) + _ocean_context->disp[0],
                   p(1) + _ocean_context->disp[1],
@@ -324,7 +324,7 @@ SOP_Ocean::cookMySop(OP_Context &context)
       if (do_normals)
       {
         /*
-          
+
           UT_Vector3* normal = (UT_Vector3*) ppt->castAttribData<UT_Vector3>(normal_index);
           normal->assign(_ocean_context->normal[0],
           _ocean_context->normal[1],
@@ -368,7 +368,7 @@ SOP_Ocean::cookMySop(OP_Context &context)
 // Here, we sub-class off of OP_Operator so that we can embed our help in the C
 // file.
 //
-class OP_OceanOperator : public OP_Operator 
+class OP_OceanOperator : public OP_Operator
 {
 
  public:
@@ -388,12 +388,12 @@ OP_OceanOperator::OP_OceanOperator(): OP_Operator("ocean",
                                                   SOP_Ocean::myTemplateList,
                                                   1,
                                                   1,
-                                                  0)        
+                                                  0)
 {
   // nothing
 }
 
-OP_OceanOperator::~OP_OceanOperator() 
+OP_OceanOperator::~OP_OceanOperator()
 {
   // nothing
 }
@@ -402,11 +402,11 @@ OP_OceanOperator::~OP_OceanOperator()
 void SOP_Ocean::getHelpText (UT_String &help,int, bool *)
 {
 
-  help  = "<h3>Ocean SOP\n\n</h3>";  
+  help  = "<h3>Ocean SOP\n\n</h3>";
 
   help  += "<h4>Description:</h4>";
 
-  help  += "" 
+  help  += ""
            "<p>"
            "This SOP is an implementation of the Ocean model described in the Siggraph course "
            "<a href=\"http://www.finelightvisualtechnology.com/docs/coursenotes2004.pdf\">Simulating Ocean Surfaces</a>,"
@@ -415,7 +415,7 @@ void SOP_Ocean::getHelpText (UT_String &help,int, bool *)
            "generating a set of waves with a spectrum approximated by the heuristic equation described by "
            "Phillips. The waves are then rapidly summed together using a fast fourier transform(FFT)."
            "</p>";
-  help  += "" 
+  help  += ""
            "<p>"
            "The SOP is a modifier that additively adjusts the incoming points, with wave height acting in the y direction and "
            "chop displacement in the xz plane."
@@ -424,7 +424,7 @@ void SOP_Ocean::getHelpText (UT_String &help,int, bool *)
            "</p>";
 
   help  += "<h4>Parameters:</h4>";
-  
+
   help  += "<p>";
 
   help  += "Ocean Resolution - defines the resolution of the compututional grid that we calculate the waves on which "
